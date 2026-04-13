@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>James's Math Garage 🏎️</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+ --bg:#0a0e1a;--card:#141a2e;--card2:#1c2440;
+ --accent:#ff3030;--accent2:#ffcc00;--ok:#00e676;--bad:#ff5252;
+ --text:#f0f4ff;--muted:#8892b8;--border:#2a3454;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+ background:linear-gradient(135deg,#0a0e1a 0%,#151b35 100%);color:var(--text);
+ min-height:100vh;padding:20px;}
+.wrap{max-width:900px;margin:0 auto}
+header{text-align:center;margin-bottom:20px}
+h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
+ -webkit-background-clip:text;background-clip:text;color:transparent;
+ letter-spacing:1px;font-weight:900}
+.sub{color:var(--muted);font-size:1em;margin-top:6px}
+.dashboard{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:12px;
+ padding:12px;text-align:center}
+.stat .num{font-size:1.8em;font-weight:900;color:var(--accent2)}
+.stat .lbl{font-size:.75em;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.chapters{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.chapter{background:var(--card);border:1px solid var(--border);border-radius:14px;
+ padding:18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.chapter:hover{border-color:var(--accent2);transform:translateY(-3px);
+ box-shadow:0 10px 30px rgba(255,204,0,.15)}
+.chapter.locked{opacity:.5;cursor:not-allowed}
+.chapter.locked:hover{transform:none;border-color:var(--border);box-shadow:none}
+.chapter.done{border-color:var(--ok)}
+.ch-icon{font-size:2.5em;margin-bottom:8px}
+.ch-title{font-size:1.1em;font-weight:800;margin-bottom:4px}
+.ch-sub{font-size:.8em;color:var(--muted);margin-bottom:10px}
+.ch-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.ch-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));
+ transition:width .4s}
+.ch-meta{display:flex;justify-content:space-between;font-size:.75em;color:var(--muted);
+ margin-top:6px}
+.badge{position:absolute;top:10px;right:10px;background:var(--ok);color:#000;
+ padding:3px 8px;border-radius:10px;font-size:.7em;font-weight:800}
+.badge.lock{background:var(--muted)}
+
+/* Quiz screen */
+.quiz{background:var(--card);border:1px solid var(--border);border-radius:14px;
+ padding:24px;display:none}
+.quiz.show{display:block;animation:fade .3s}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.qhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;
+ flex-wrap:wrap;gap:10px}
+.qtitle{font-size:1.3em;font-weight:800}
+.qprog{font-size:.85em;color:var(--muted)}
+.qbar{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:18px}
+.qbar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));
+ transition:width .3s}
+
+.scene{background:var(--card2);border-radius:12px;padding:18px;margin-bottom:14px;
+ border-left:4px solid var(--accent2)}
+.scene-title{font-size:.8em;color:var(--accent2);text-transform:uppercase;
+ letter-spacing:1px;font-weight:800;margin-bottom:6px}
+.scene-text{font-size:1em;line-height:1.5}
+
+.problem{font-size:1.6em;font-weight:800;text-align:center;margin:18px 0;
+ padding:18px;background:var(--bg);border-radius:12px;
+ font-family:"SF Mono",Menlo,monospace}
+.stack{display:inline-block;text-align:right;font-size:1.4em;line-height:1.3}
+.stack .op{display:inline-block;width:1em;text-align:left}
+
+.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.choice{background:var(--card2);border:2px solid var(--border);color:var(--text);
+ padding:16px;border-radius:10px;font-size:1.1em;font-weight:700;cursor:pointer;
+ transition:all .15s;font-family:inherit}
+.choice:hover:not(:disabled){border-color:var(--accent2);background:#252e4a}
+.choice.right{background:var(--ok);border-color:var(--ok);color:#000;animation:pop .3s}
+.choice.wrong{background:var(--bad);border-color:var(--bad);color:#fff;animation:shake .3s}
+.choice:disabled{cursor:not-allowed}
+@keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}
+ 75%{transform:translateX(6px)}}
+
+.input-row{display:flex;gap:10px;justify-content:center;align-items:center;margin:10px 0}
+.ans-input{font-size:1.5em;padding:12px 18px;width:160px;text-align:center;
+ background:var(--card2);border:2px solid var(--border);color:var(--text);
+ border-radius:10px;font-weight:800;font-family:inherit}
+.ans-input:focus{outline:none;border-color:var(--accent2)}
+.btn{background:linear-gradient(135deg,var(--accent),#ff6b00);color:#fff;border:none;
+ padding:14px 26px;font-size:1.05em;font-weight:800;border-radius:10px;cursor:pointer;
+ font-family:inherit;text-transform:uppercase;letter-spacing:1px;transition:all .15s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(255,48,48,.4)}
+.btn.alt{background:linear-gradient(135deg,#1e3a8a,#3b82f6)}
+
+.feedback{margin-top:14px;padding:14px;border-radius:10px;font-weight:600;
+ display:none;line-height:1.5}
+.feedback.show{display:block;animation:fade .3s}
+.feedback.ok{background:rgba(0,230,118,.15);border:1px solid var(--ok);color:var(--ok)}
+.feedback.no{background:rgba(255,82,82,.15);border:1px solid var(--bad);color:#ffaaaa}
+
+.controls{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.back-btn{background:transparent;border:1px solid var(--border);color:var(--muted);
+ padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.9em}
+.back-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+
+.celebrate{text-align:center;padding:20px}
+.celebrate h2{font-size:2em;color:var(--accent2);margin-bottom:10px}
+.celebrate .stars{font-size:3em;margin:14px 0}
+.verse{background:var(--card2);border-left:4px solid var(--accent2);padding:14px;
+ border-radius:8px;margin:14px 0;font-style:italic;color:#cdd6f4}
+.verse-ref{display:block;text-align:right;font-style:normal;color:var(--accent2);
+ font-weight:800;margin-top:6px;font-size:.85em}
+
+.tip{background:rgba(255,204,0,.1);border-left:3px solid var(--accent2);
+ padding:10px 14px;border-radius:6px;font-size:.9em;margin-top:10px;color:#ffe082}
+
+@media(max-width:600px){
+ h1{font-size:1.8em}
+ .dashboard{grid-template-columns:repeat(2,1fr)}
+ .choices{grid-template-columns:1fr}
+ .problem{font-size:1.3em}
+}
+
+.streak-fire{display:inline-block;animation:flame .6s infinite alternate}
+@keyframes flame{from{transform:scale(1)}to{transform:scale(1.2)}}
+
+.confetti{position:fixed;width:10px;height:10px;pointer-events:none;z-index:1000}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+ <h1>🏎️ James's Math Garage 🏁</h1>
+ <div class="sub">3rd Grade Math · Powered by Porsches, Raptors & God's Word</div>
+</header>
+
+<div class="dashboard">
+ <div class="stat"><div class="num" id="s-xp">0</div><div class="lbl">XP Earned</div></div>
+ <div class="stat"><div class="num" id="s-streak">0</div><div class="lbl">Streak 🔥</div></div>
+ <div class="stat"><div class="num" id="s-stars">0</div><div class="lbl">Stars ⭐</div></div>
+ <div class="stat"><div class="num" id="s-done">0</div><div class="lbl">Levels Done</div></div>
+</div>
+
+<div id="home">
+ <div class="chapters" id="chapters"></div>
+</div>
+
+<div class="quiz" id="quiz">
+ <div class="qhead">
+  <div>
+   <div class="qtitle" id="q-title">Loading...</div>
+   <div class="qprog" id="q-prog">Question 1 of 5</div>
+  </div>
+  <button class="back-btn" onclick="goHome()">← Garage</button>
+ </div>
+ <div class="qbar"><div class="qbar-fill" id="qbar"></div></div>
+ <div id="q-body"></div>
+</div>
+
+</div>
+
+<script>
+// ===== PROGRESS STORAGE (in-memory; persists per session) =====
+const STORE = {data:null};
+function loadProgress(){
+ if(STORE.data) return STORE.data;
+ try{
+  const raw=window.localStorage&&localStorage.getItem('jamesmath');
+  STORE.data = raw?JSON.parse(raw):{xp:0,stars:0,streak:0,done:{},best:{}};
+ }catch(e){STORE.data={xp:0,stars:0,streak:0,done:{},best:{}}}
+ return STORE.data;
+}
+function saveProgress(){
+ try{localStorage.setItem('jamesmath',JSON.stringify(STORE.data))}catch(e){}
+}
+
+// ===== CONTENT POOLS =====
+const CARS = [
+ {name:"Porsche 911 GT3 RS",hp:518,tq:343,zsixty:3.0,top:184,qm:10.9},
+ {name:"Ferrari SF90 Stradale",hp:986,tq:590,zsixty:2.5,top:211,qm:9.6},
+ {name:"Aston Martin Valkyrie",hp:1139,tq:664,zsixty:2.5,top:250,qm:9.0},
+ {name:"Lamborghini Revuelto",hp:1001,tq:535,zsixty:2.5,top:217,qm:9.7},
+ {name:"Bugatti Chiron Super Sport",hp:1577,tq:1180,zsixty:2.4,top:304,qm:9.4},
+ {name:"McLaren 750S",hp:740,tq:590,zsixty:2.7,top:206,qm:10.0},
+ {name:"Koenigsegg Jesko Absolut",hp:1600,tq:1106,zsixty:2.5,top:330,qm:8.8},
+ {name:"Pagani Huayra R",hp:838,tq:553,zsixty:2.7,top:238,qm:9.5},
+];
+const TRUCKS = [
+ {name:"Ford F-150 Raptor R",hp:720,tq:640,zsixty:3.6,top:120},
+ {name:"Ram TRX",hp:702,tq:650,zsixty:3.7,top:118},
+ {name:"Mercedes Unimog U5023",hp:231,tq:664,zsixty:30,top:55},
+ {name:"Land Rover Defender V8",hp:518,tq:461,zsixty:5.1,top:149},
+];
+const SKYSCRAPERS = [
+ {name:"Burj Khalifa (Dubai)",ft:2717,floors:163},
+ {name:"Merdeka 118 (Malaysia)",ft:2227,floors:118},
+ {name:"Shanghai Tower (China)",ft:2073,floors:128},
+ {name:"One World Trade Center (NYC)",ft:1776,floors:104},
+ {name:"Empire State Building (NYC)",ft:1454,floors:102},
+ {name:"Willis Tower (Chicago)",ft:1450,floors:108},
+ {name:"Eiffel Tower (Paris)",ft:1083,floors:0},
+];
+const ANIMALS = [
+ {a:"Grizzly Bear",b:"Lion",winner:"Grizzly Bear",fact:"A grizzly's bite force is around 1,200 PSI vs a lion's 650 PSI."},
+ {a:"Saltwater Crocodile",b:"Great White Shark",winner:"Saltwater Crocodile",fact:"Salties have the strongest bite ever measured — 3,700 PSI!"},
+ {a:"African Elephant",b:"Rhino",winner:"African Elephant",fact:"Adult bull elephants weigh up to 14,000 lbs."},
+ {a:"Gorilla",b:"Black Bear",winner:"Gorilla",fact:"Silverbacks can lift 4x their body weight."},
+ {a:"Eagle",b:"Hawk",winner:"Eagle",fact:"Bald eagles have a 7-foot wingspan!"},
+];
+const VERSES = [
+ {t:"I can do all things through Christ who strengthens me.",r:"Philippians 4:13"},
+ {t:"Trust in the Lord with all your heart, and lean not on your own understanding.",r:"Proverbs 3:5"},
+ {t:"Be strong and of good courage; do not be afraid.",r:"Joshua 1:9"},
+ {t:"The Lord is my shepherd; I shall not want.",r:"Psalm 23:1"},
+ {t:"For God so loved the world that He gave His only begotten Son.",r:"John 3:16"},
+ {t:"In the beginning God created the heavens and the earth.",r:"Genesis 1:1"},
+ {t:"Children, obey your parents in the Lord, for this is right.",r:"Ephesians 6:1"},
+ {t:"Let your light so shine before men, that they may see your good works.",r:"Matthew 5:16"},
+];
+const BIBLE_FACTS = [
+ "Noah was 600 years old when the flood came.",
+ "Goliath was about 9 feet 9 inches tall.",
+ "There are 66 books in the Bible.",
+ "Methuselah lived 969 years — longest in the Bible.",
+ "Jesus chose 12 disciples.",
+ "Moses led the Israelites for 40 years in the wilderness.",
+ "David was the 8th son of Jesse.",
+ "Solomon built the temple in 7 years.",
+];
+
+// ===== HELPERS =====
+const r = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const pick = arr => arr[r(0,arr.length-1)];
+const shuffle = a => a.slice().sort(()=>Math.random()-.5);
+
+// Generate wrong answer choices near the correct one
+function makeChoices(correct, spread=10){
+ const set = new Set([correct]);
+ while(set.size<4){
+  const off = r(-spread,spread);
+  if(off!==0) set.add(Math.max(0,correct+off));
+ }
+ return shuffle([...set]);
+}
+
+// ===== PROBLEM GENERATORS =====
+// Each generator returns {scene, problem, answer, choices?, type}
+// type: 'mc' (multiple choice) or 'input'
+
+function gen_add2(){ // 2-digit + 2-digit, no regrouping (warm-up)
+ const car = pick(CARS);
+ const a = r(20,40), b = r(10,40);
+ return {
+  scene:`The ${car.name} has ${a} HP from one engine and ${b} HP from another. How much total horsepower?`,
+  problem:`${a} + ${b}`,
+  answer:a+b, type:'mc',
+  fact:`The real ${car.name} actually makes ${car.hp} HP! 🏎️`
+ };
+}
+
+function gen_add3_easy(){ // 3-digit + 3-digit no carry
+ const sky = pick(SKYSCRAPERS);
+ const a = r(100,400), b = r(100,500-a%100);
+ // simpler: just pick numbers that won't carry too much
+ const aa = r(100,400), bb = r(100,400);
+ return {
+  scene:`A new tower is built next to the ${sky.name}. Floor 1 is ${aa} ft tall and Floor 2 adds ${bb} ft. Total height?`,
+  problem:`${aa} + ${bb}`,
+  answer:aa+bb, type:'input',
+  fact:`The ${sky.name} stands ${sky.ft} ft tall! 🏙️`
+ };
+}
+
+function gen_add3_regroup(){ // 3-digit with regrouping
+ const a = r(150,799), b = r(150,799);
+ const sky = pick(SKYSCRAPERS);
+ return {
+  scene:`Two skyscrapers are built side by side. The first is ${a} ft tall and the second is ${b} ft tall. If you stacked them, how tall would they be?`,
+  problem:`${a} + ${b}`,
+  answer:a+b, type:'input',
+  fact:`For comparison: the ${sky.name} is ${sky.ft} ft! 🏗️`
+ };
+}
+
+function gen_sub2(){ // simple subtraction
+ const a = r(50,99), b = r(10,a-1);
+ const animal = pick(ANIMALS);
+ return {
+  scene:`A ${animal.a} weighs ${a*10} lbs and a smaller one weighs ${b*10} lbs. How much heavier is the bigger one (in tens)?`,
+  problem:`${a} - ${b}`,
+  answer:a-b, type:'mc',
+  fact:animal.fact
+ };
+}
+
+function gen_sub3_easy(){ // 3-digit no borrow
+ const a = r(500,899), b = r(100,a-100);
+ // simplify: bigger digit on top
+ return {
+  scene:`A racetrack is ${a} meters long. A driver has gone ${b} meters. How many meters are left?`,
+  problem:`${a} - ${b}`,
+  answer:a-b, type:'input',
+  fact:`The Nürburgring is 12,944 meters long! 🏁`
+ };
+}
+
+function gen_sub3_borrow(){ // 3-digit with borrowing
+ const a = r(300,900), b = r(100,a-50);
+ const car = pick(CARS);
+ return {
+  scene:`The ${car.name} can do a quarter mile in ${a} feet but the finish line is ${a+50} feet away. Wait — your friend's car has ${b} feet to go. How much further does YOUR car need vs your friend?`,
+  problem:`${a} - ${b}`,
+  answer:a-b, type:'input',
+  fact:`The real ${car.name} runs the quarter mile in about ${car.qm} seconds!`
+ };
+}
+
+function gen_compare(){ // < > =
+ const a = r(100,999), b = r(100,999);
+ const sky1 = pick(SKYSCRAPERS), sky2 = pick(SKYSCRAPERS);
+ const sym = a>b?'>':(a<b?'<':'=');
+ return {
+  scene:`The ${sky1.name} model is ${a} ft and the ${sky2.name} model is ${b} ft. Which symbol is correct?`,
+  problem:`${a} ___ ${b}`,
+  answer:sym, type:'mc-sym',
+  choices:['>','<','='],
+  fact:`Real heights: ${sky1.name} = ${sky1.ft} ft, ${sky2.name} = ${sky2.ft} ft 🏙️`
+ };
+}
+
+function gen_place_value(){
+ const n = r(1000,9999);
+ const places = [
+  {lbl:'thousands',v:Math.floor(n/1000)},
+  {lbl:'hundreds',v:Math.floor(n/100)%10},
+  {lbl:'tens',v:Math.floor(n/10)%10},
+  {lbl:'ones',v:n%10},
+ ];
+ const p = pick(places);
+ const car = pick(CARS);
+ return {
+  scene:`The ${car.name} costs $${n.toLocaleString()}. What digit is in the ${p.lbl} place?`,
+  problem:`$${n.toLocaleString()}`,
+  answer:p.v, type:'mc',
+  fact:`Supercars like this can cost over $300,000 in real life! 💰`
+ };
+}
+
+function gen_round(){ // round to nearest 10 or 100
+ const n = r(110,890);
+ const to = pick([10,100]);
+ const ans = Math.round(n/to)*to;
+ const truck = pick(TRUCKS);
+ return {
+  scene:`The ${truck.name} makes ${truck.hp} HP, but in this race we'll use ${n} HP. Round ${n} to the nearest ${to}.`,
+  problem:`Round ${n} to nearest ${to}`,
+  answer:ans, type:'mc',
+  fact:`The real ${truck.name} has ${truck.hp} HP and ${truck.tq} lb-ft of torque! 🛻`
+ };
+}
+
+function gen_word_easy(){
+ const verse = pick(VERSES);
+ const a = r(20,60), b = r(10,40);
+ return {
+  scene:`At Sunday school, ${a} kids came in the morning and ${b} more came in the evening. How many kids in total?`,
+  problem:`${a} + ${b} = ?`,
+  answer:a+b, type:'mc',
+  bibleVerse:verse
+ };
+}
+
+function gen_word_hard(){
+ const a = r(150,400);
+ const b = r(50,150);
+ const sky = pick(SKYSCRAPERS);
+ return {
+  scene:`A construction crew built ${a} feet of the ${sky.name} this month and ${b} feet last month. How many feet have they built in total?`,
+  problem:`${a} + ${b} = ?`,
+  answer:a+b, type:'input',
+  fact:`The ${sky.name} is ${sky.ft} ft tall and has ${sky.floors} floors! 🏗️`
+ };
+}
+
+function gen_missing(){
+ const a = r(20,80), sum = a + r(10,40);
+ const fact = pick(BIBLE_FACTS);
+ return {
+  scene:`Bible math! ${fact} If we have ${a} and need to reach ${sum}, what's missing?`,
+  problem:`${a} + ___ = ${sum}`,
+  answer:sum-a, type:'mc',
+  fact:`📖 ${fact}`
+ };
+}
+
+// ===== CHAPTERS =====
+const CHAPTERS = [
+ {id:'warmup',icon:'🔥',title:'Warm-Up Garage',sub:'2-digit adding · easy',
+  unlocked:true,gens:[gen_add2,gen_add2,gen_sub2]},
+ {id:'place',icon:'🏷️',title:'Place Value Pit Stop',sub:'thousands, hundreds, tens',
+  unlocked:true,gens:[gen_place_value,gen_place_value,gen_compare]},
+ {id:'add3easy',icon:'🏗️',title:'Skyscraper Stacker',sub:'3-digit adding · easy',
+  needs:['warmup'],gens:[gen_add3_easy,gen_add3_easy,gen_add3_easy]},
+ {id:'add3hard',icon:'🏎️',title:'Turbo Adding',sub:'3-digit · regrouping',
+  needs:['add3easy'],gens:[gen_add3_regroup,gen_add3_regroup,gen_add3_regroup]},
+ {id:'sub3easy',icon:'🏁',title:'Race to Zero',sub:'3-digit subtracting · easy',
+  needs:['warmup'],gens:[gen_sub3_easy,gen_sub3_easy,gen_sub3_easy]},
+ {id:'sub3hard',icon:'💥',title:'Crash Test Subtracting',sub:'3-digit · borrowing',
+  needs:['sub3easy'],gens:[gen_sub3_borrow,gen_sub3_borrow,gen_sub3_borrow]},
+ {id:'round',icon:'🎯',title:'Estimation Station',sub:'rounding to 10 & 100',
+  needs:['place'],gens:[gen_round,gen_round,gen_round]},
+ {id:'compare',icon:'⚖️',title:'Animal Showdown',sub:'> < = comparing',
+  needs:['place'],gens:[gen_compare,gen_compare,gen_compare]},
+ {id:'missing',icon:'🧩',title:'Missing Number Mystery',sub:'find the gap',
+  needs:['add3easy'],gens:[gen_missing,gen_missing,gen_missing]},
+ {id:'word_easy',icon:'📖',title:'Bible Word Problems',sub:'easy storytelling math',
+  needs:['warmup'],gens:[gen_word_easy,gen_word_easy,gen_word_easy]},
+ {id:'word_hard',icon:'🏆',title:'Champion Word Problems',sub:'harder real-world',
+  needs:['add3hard','sub3hard'],gens:[gen_word_hard,gen_word_hard,gen_word_hard]},
+ {id:'boss',icon:'👑',title:'BOSS LEVEL',sub:'all skills · 10 questions',
+  needs:['add3hard','sub3hard','round','compare','missing'],
+  gens:[gen_add3_regroup,gen_sub3_borrow,gen_round,gen_compare,gen_missing,
+        gen_add3_regroup,gen_sub3_borrow,gen_word_hard,gen_place_value,gen_missing]},
+];
+
+// ===== UI RENDERING =====
+function isUnlocked(ch){
+ if(ch.unlocked) return true;
+ const p = loadProgress();
+ return (ch.needs||[]).every(n=>p.done[n]);
+}
+
+function renderChapters(){
+ const p = loadProgress();
+ document.getElementById('s-xp').textContent = p.xp;
+ document.getElementById('s-streak').textContent = p.streak;
+ document.getElementById('s-stars').textContent = p.stars;
+ document.getElementById('s-done').textContent = Object.keys(p.done).length;
+ const root = document.getElementById('chapters');
+ root.innerHTML = '';
+ CHAPTERS.forEach(ch=>{
+  const unlocked = isUnlocked(ch);
+  const done = !!p.done[ch.id];
+  const best = p.best[ch.id]||0;
+  const total = ch.gens.length;
+  const pct = done?100:0;
+  const div = document.createElement('div');
+  div.className = 'chapter'+(unlocked?'':' locked')+(done?' done':'');
+  div.innerHTML = `
+   ${done?'<span class="badge">✓ DONE</span>':(unlocked?'':'<span class="badge lock">🔒</span>')}
+   <div class="ch-icon">${ch.icon}</div>
+   <div class="ch-title">${ch.title}</div>
+   <div class="ch-sub">${ch.sub}</div>
+   <div class="ch-bar"><div class="ch-bar-fill" style="width:${pct}%"></div></div>
+   <div class="ch-meta">
+    <span>${total} questions</span>
+    <span>${best?'Best: '+best+'/'+total:'Not started'}</span>
+   </div>`;
+  if(unlocked) div.onclick = ()=>startChapter(ch);
+  root.appendChild(div);
+ });
+}
+
+// ===== QUIZ STATE =====
+let CURR = null;
+function startChapter(ch){
+ CURR = {ch, idx:0, score:0, qs:ch.gens.map(g=>g())};
+ document.getElementById('home').style.display='none';
+ document.getElementById('quiz').classList.add('show');
+ document.getElementById('q-title').textContent = ch.icon+' '+ch.title;
+ renderQ();
+}
+function goHome(){
+ CURR = null;
+ document.getElementById('quiz').classList.remove('show');
+ document.getElementById('home').style.display='';
+ renderChapters();
+}
+
+function renderQ(){
+ const q = CURR.qs[CURR.idx];
+ const total = CURR.qs.length;
+ document.getElementById('q-prog').textContent = `Question ${CURR.idx+1} of ${total} · Score: ${CURR.score}`;
+ document.getElementById('qbar').style.width = (CURR.idx/total*100)+'%';
+ const body = document.getElementById('q-body');
+ let html = `
+  <div class="scene">
+   <div class="scene-title">📋 The Setup</div>
+   <div class="scene-text">${q.scene}</div>
+  </div>
+  <div class="problem">${q.problem}</div>`;
+ if(q.type==='mc' || q.type==='mc-sym'){
+  const choices = q.type==='mc-sym' ? q.choices : makeChoices(q.answer);
+  html += '<div class="choices">';
+  choices.forEach(c=>{
+   html += `<button class="choice" data-v="${c}">${c}</button>`;
+  });
+  html += '</div>';
+ } else {
+  html += `
+   <div class="input-row">
+    <input class="ans-input" id="ans" type="number" inputmode="numeric" placeholder="?" autocomplete="off">
+    <button class="btn" id="check">Check ✓</button>
+   </div>`;
+ }
+ html += '<div class="feedback" id="fb"></div>';
+ body.innerHTML = html;
+
+ if(q.type==='mc' || q.type==='mc-sym'){
+  body.querySelectorAll('.choice').forEach(b=>{
+   b.onclick = ()=>handleAnswer(b.dataset.v, q, b);
+  });
+ } else {
+  const inp = document.getElementById('ans');
+  inp.focus();
+  inp.onkeydown = e=>{if(e.key==='Enter') document.getElementById('check').click()};
+  document.getElementById('check').onclick = ()=>{
+   const v = inp.value.trim();
+   if(v==='') return;
+   handleAnswer(v, q, null);
+  };
+ }
+}
+
+function handleAnswer(val, q, btn){
+ const correct = String(q.answer)===String(val);
+ const fb = document.getElementById('fb');
+ const p = loadProgress();
+ if(correct){
+  p.streak += 1;
+  p.xp += 10;
+  if(p.streak>0 && p.streak%5===0) p.xp += 25; // streak bonus
+  CURR.score += 1;
+  if(btn) btn.classList.add('right');
+  document.querySelectorAll('.choice').forEach(b=>b.disabled=true);
+  fb.className = 'feedback ok show';
+  let msg = `<b>✅ CORRECT!</b> +10 XP`;
+  if(p.streak>0 && p.streak%5===0) msg += ` · 🔥 ${p.streak} streak bonus +25!`;
+  if(q.fact) msg += `<br><br>💡 ${q.fact}`;
+  if(q.bibleVerse) msg += `<div class="verse">"${q.bibleVerse.t}"<span class="verse-ref">— ${q.bibleVerse.r}</span></div>`;
+  fb.innerHTML = msg + '<div style="margin-top:10px"><button class="btn" onclick="nextQ()">Next →</button></div>';
+ } else {
+  p.streak = 0;
+  if(btn) btn.classList.add('wrong');
+  fb.className = 'feedback no show';
+  fb.innerHTML = `<b>❌ Not quite!</b> Try again — you've got this!
+   <div class="tip">💡 Tip: ${getTip(q)}</div>
+   <div style="margin-top:10px"><button class="btn alt" onclick="retryQ()">Try Again</button></div>`;
+  if(btn) setTimeout(()=>{btn.classList.remove('wrong');btn.disabled=false},800);
+ }
+ saveProgress();
+ document.getElementById('s-xp').textContent = p.xp;
+ document.getElementById('s-streak').textContent = p.streak;
+}
+
+function getTip(q){
+ const p = q.problem;
+ if(p.includes('+')) return "Line up the digits by place value (ones under ones, tens under tens). Add the ones first, then carry if needed.";
+ if(p.includes('-')) return "Subtract the ones first. If the top digit is smaller, borrow 1 from the tens column!";
+ if(p.includes('___') && q.type==='mc-sym') return "Bigger number on the left = use >. Smaller = use <. Same = use =.";
+ if(p.toLowerCase().includes('round')) return "Look at the digit to the right. 0-4 round DOWN, 5-9 round UP.";
+ return "Read the problem one more time, slow and steady.";
+}
+
+function retryQ(){
+ const fb = document.getElementById('fb');
+ fb.classList.remove('show');
+ const inp = document.getElementById('ans');
+ if(inp){inp.value='';inp.focus()}
+}
+
+function nextQ(){
+ CURR.idx += 1;
+ if(CURR.idx >= CURR.qs.length){
+  finishChapter();
+ } else {
+  renderQ();
+ }
+}
+
+function finishChapter(){
+ const p = loadProgress();
+ const total = CURR.qs.length;
+ const score = CURR.score;
+ const stars = score===total ? 3 : (score>=total*.7 ? 2 : (score>=total*.5 ? 1 : 0));
+ if(stars>0){
+  p.done[CURR.ch.id] = true;
+  if(!p.best[CURR.ch.id] || score>p.best[CURR.ch.id]) p.best[CURR.ch.id]=score;
+  p.stars = (p.stars||0) + stars;
+  saveProgress();
+ }
+ const verse = pick(VERSES);
+ const body = document.getElementById('q-body');
+ body.innerHTML = `
+  <div class="celebrate">
+   <div class="stars">${'⭐'.repeat(stars)}${'☆'.repeat(3-stars)}</div>
+   <h2>${stars===3?'PERFECT RUN! 🏆':(stars>=2?'Great Job!':(stars>=1?'Nice work!':'Keep practicing!'))}</h2>
+   <p style="font-size:1.2em;margin:10px 0">You scored <b>${score}/${total}</b></p>
+   <p style="color:var(--muted)">+${score*10} XP earned this run</p>
+   <div class="verse">"${verse.t}"<span class="verse-ref">— ${verse.r}</span></div>
+   <div class="controls" style="justify-content:center">
+    <button class="btn" onclick="startChapter(CURR.ch)">🔄 Try Again</button>
+    <button class="btn alt" onclick="goHome()">🏠 Back to Garage</button>
+   </div>
+  </div>`;
+ document.getElementById('qbar').style.width = '100%';
+ // confetti for perfect
+ if(stars===3) confettiBurst();
+}
+
+function confettiBurst(){
+ const colors = ['#ff3030','#ffcc00','#00e676','#3b82f6','#ff6b00'];
+ for(let i=0;i<60;i++){
+  const c = document.createElement('div');
+  c.className='confetti';
+  c.style.background = colors[i%colors.length];
+  c.style.left = Math.random()*100+'%';
+  c.style.top = '-20px';
+  c.style.transform = `rotate(${Math.random()*360}deg)`;
+  document.body.appendChild(c);
+  const dx = (Math.random()-.5)*400;
+  const dy = window.innerHeight + 50;
+  c.animate([
+   {transform:`translate(0,0) rotate(0deg)`,opacity:1},
+   {transform:`translate(${dx}px,${dy}px) rotate(720deg)`,opacity:0}
+  ],{duration:2500+Math.random()*1500,easing:'cubic-bezier(.2,.7,.3,1)'}).onfinish=()=>c.remove();
+ }
+}
+
+// ===== INIT =====
+loadProgress();
+renderChapters();
+</script>
+</body>
+</html>
