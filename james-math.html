@@ -235,11 +235,17 @@ const pick = arr => arr[r(0,arr.length-1)];
 const shuffle = a => a.slice().sort(()=>Math.random()-.5);
 
 // Generate wrong answer choices near the correct one
-function makeChoices(correct, spread=10){
+function makeChoices(correct, spread=10, maxVal=null){
  const set = new Set([correct]);
- while(set.size<4){
+ let attempts = 0;
+ while(set.size<4 && attempts<50){
+  attempts++;
   const off = r(-spread,spread);
-  if(off!==0) set.add(Math.max(0,correct+off));
+  if(off===0) continue;
+  let v = correct+off;
+  if(v<0) continue;
+  if(maxVal!==null && v>maxVal) continue;
+  set.add(v);
  }
  return shuffle([...set]);
 }
@@ -249,13 +255,13 @@ function makeChoices(correct, spread=10){
 // type: 'mc' (multiple choice) or 'input'
 
 function gen_add2(){ // 2-digit + 2-digit, no regrouping (warm-up)
- const car = pick(CARS);
+ const car1 = pick(CARS), car2 = pick(CARS);
  const a = r(20,40), b = r(10,40);
  return {
-  scene:`The ${car.name} has ${a} HP from one engine and ${b} HP from another. How much total horsepower?`,
+  scene:`At a car show there are ${a} ${car1.name} models on display and ${b} ${car2.name} models. How many supercars in total?`,
   problem:`${a} + ${b}`,
   answer:a+b, type:'mc',
-  fact:`The real ${car.name} actually makes ${car.hp} HP! 🏎️`
+  fact:`Did you know? The real ${car1.name} makes ${car1.hp} HP! 🏎️`
  };
 }
 
@@ -287,7 +293,7 @@ function gen_sub2(){ // simple subtraction
  const a = r(50,99), b = r(10,a-1);
  const animal = pick(ANIMALS);
  return {
-  scene:`A ${animal.a} weighs ${a*10} lbs and a smaller one weighs ${b*10} lbs. How much heavier is the bigger one (in tens)?`,
+  scene:`There were ${a} ${animal.a}s at a wildlife reserve. ${b} of them moved to a different park. How many ${animal.a}s are left at the reserve?`,
   problem:`${a} - ${b}`,
   answer:a-b, type:'mc',
   fact:animal.fact
@@ -309,19 +315,21 @@ function gen_sub3_borrow(){ // 3-digit with borrowing
  const a = r(300,900), b = r(100,a-50);
  const car = pick(CARS);
  return {
-  scene:`The ${car.name} can do a quarter mile in ${a} feet but the finish line is ${a+50} feet away. Wait — your friend's car has ${b} feet to go. How much further does YOUR car need vs your friend?`,
+  scene:`The ${car.name} is racing on a track that is ${a} feet long. The driver has already gone ${b} feet. How many feet does the driver have left to reach the finish line?`,
   problem:`${a} - ${b}`,
   answer:a-b, type:'input',
-  fact:`The real ${car.name} runs the quarter mile in about ${car.qm} seconds!`
+  fact:`The real ${car.name} runs the quarter mile in about ${car.qm} seconds! 🏁`
  };
 }
 
 function gen_compare(){ // < > =
- const a = r(100,999), b = r(100,999);
+ const a = r(100,999);
+ // 1 in 5 chance the numbers are equal so all three symbols can show up
+ const b = r(1,5)===1 ? a : r(100,999);
  const sky1 = pick(SKYSCRAPERS), sky2 = pick(SKYSCRAPERS);
  const sym = a>b?'>':(a<b?'<':'=');
  return {
-  scene:`The ${sky1.name} model is ${a} ft and the ${sky2.name} model is ${b} ft. Which symbol is correct?`,
+  scene:`A model of the ${sky1.name} is ${a} inches tall. A model of the ${sky2.name} is ${b} inches tall. Which symbol goes between them?`,
   problem:`${a} ___ ${b}`,
   answer:sym, type:'mc-sym',
   choices:['>','<','='],
@@ -342,8 +350,8 @@ function gen_place_value(){
  return {
   scene:`The ${car.name} costs $${n.toLocaleString()}. What digit is in the ${p.lbl} place?`,
   problem:`$${n.toLocaleString()}`,
-  answer:p.v, type:'mc',
-  fact:`Supercars like this can cost over $300,000 in real life! 💰`
+  answer:p.v, type:'mc', spread:5, maxVal:9,
+  fact:`Real supercars like this can cost over $300,000! 💰`
  };
 }
 
@@ -352,10 +360,19 @@ function gen_round(){ // round to nearest 10 or 100
  const to = pick([10,100]);
  const ans = Math.round(n/to)*to;
  const truck = pick(TRUCKS);
+ // Build distractor choices that are also rounded values
+ const wrongs = new Set();
+ const offs = [-2,-1,1,2];
+ while(wrongs.size<3){
+  const o = pick(offs);
+  const v = ans + o*to;
+  if(v>0 && v!==ans) wrongs.add(v);
+ }
  return {
-  scene:`The ${truck.name} makes ${truck.hp} HP, but in this race we'll use ${n} HP. Round ${n} to the nearest ${to}.`,
+  scene:`A ${truck.name} can tow ${n} pounds of cargo. To make it easier to remember, round ${n} to the nearest ${to}.`,
   problem:`Round ${n} to nearest ${to}`,
-  answer:ans, type:'mc',
+  answer:ans, type:'mc-sym',
+  choices:shuffle([ans,...wrongs]),
   fact:`The real ${truck.name} has ${truck.hp} HP and ${truck.tq} lb-ft of torque! 🛻`
  };
 }
@@ -376,10 +393,10 @@ function gen_word_hard(){
  const b = r(50,150);
  const sky = pick(SKYSCRAPERS);
  return {
-  scene:`A construction crew built ${a} feet of the ${sky.name} this month and ${b} feet last month. How many feet have they built in total?`,
+  scene:`A model builder is making a tiny version of the ${sky.name}. He built ${a} pieces this week and ${b} pieces last week. How many pieces has he built so far?`,
   problem:`${a} + ${b} = ?`,
   answer:a+b, type:'input',
-  fact:`The ${sky.name} is ${sky.ft} ft tall and has ${sky.floors} floors! 🏗️`
+  fact:`The real ${sky.name} is ${sky.ft} ft tall and has ${sky.floors} floors! 🏗️`
  };
 }
 
@@ -387,10 +404,10 @@ function gen_missing(){
  const a = r(20,80), sum = a + r(10,40);
  const fact = pick(BIBLE_FACTS);
  return {
-  scene:`Bible math! ${fact} If we have ${a} and need to reach ${sum}, what's missing?`,
+  scene:`A youth pastor is setting up chairs for a Bible study. He needs ${sum} chairs total and has already set up ${a}. How many more chairs does he need?`,
   problem:`${a} + ___ = ${sum}`,
   answer:sum-a, type:'mc',
-  fact:`📖 ${fact}`
+  fact:`📖 Bible fact: ${fact}`
  };
 }
 
@@ -491,7 +508,7 @@ function renderQ(){
   </div>
   <div class="problem">${q.problem}</div>`;
  if(q.type==='mc' || q.type==='mc-sym'){
-  const choices = q.type==='mc-sym' ? q.choices : makeChoices(q.answer);
+  const choices = q.type==='mc-sym' ? q.choices : makeChoices(q.answer, q.spread||10, q.maxVal||null);
   html += '<div class="choices">';
   choices.forEach(c=>{
    html += `<button class="choice" data-v="${c}">${c}</button>`;
