@@ -133,6 +133,11 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 <header>
  <h1>🏎️ James's Math Garage 🏁</h1>
  <div class="sub">3rd Grade Math · Powered by Porsches, Raptors & God's Word</div>
+ <div id="player-badge" style="margin-top:10px;display:none;align-items:center;justify-content:center;gap:8px;font-size:.9em">
+  <span style="color:var(--muted)">Playing as</span>
+  <span id="player-name" style="color:var(--accent2);font-weight:800"></span>
+  <button onclick="switchPlayer()" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.85em">Switch</button>
+ </div>
 </header>
 
 <div class="dashboard">
@@ -160,19 +165,165 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 
 </div>
 
+<!-- Player picker overlay -->
+<div id="picker-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,14,26,.95);z-index:2000;align-items:center;justify-content:center;padding:20px">
+ <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:480px;width:100%;text-align:center">
+  <h2 style="font-size:1.6em;background:linear-gradient(135deg,#ff3030,#ffcc00);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:8px">Who's playing? 🏎️</h2>
+  <p style="color:var(--muted);margin-bottom:20px;font-size:.95em">Pick your name so your progress saves on every device.</p>
+  <div id="player-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px"></div>
+  <div style="display:flex;gap:10px;align-items:center;margin-top:14px">
+   <input id="custom-name" type="text" placeholder="Or type a new name…" maxlength="20" style="flex:1;padding:12px 14px;background:var(--card2);border:2px solid var(--border);color:var(--text);border-radius:10px;font-size:1em;font-family:inherit">
+   <button class="btn" id="custom-go" style="padding:12px 18px;font-size:.9em">GO</button>
+  </div>
+  <div id="picker-status" style="margin-top:14px;color:var(--muted);font-size:.85em;min-height:18px"></div>
+ </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+
 <script>
-// ===== PROGRESS STORAGE (in-memory; persists per session) =====
+// ===== FIREBASE SETUP =====
+const firebaseConfig = {
+ apiKey: "AIzaSyDEKx1uR_Ky0rMXrx20mZwl4lu5OTdMJmk",
+ authDomain: "james-math-garage.firebaseapp.com",
+ databaseURL: "https://james-math-garage-default-rtdb.firebaseio.com",
+ projectId: "james-math-garage",
+ storageBucket: "james-math-garage.firebasestorage.app",
+ messagingSenderId: "63684182523",
+ appId: "1:63684182523:web:6ea459ef99457091b4cb5e",
+ measurementId: "G-1SPM672TV1"
+};
+let DB = null;
+let CLOUD_OK = false;
+
+// Lazily initialize Firebase the first time we need it.
+// This handles the case where the SDK scripts are still loading when our code runs,
+// and gracefully degrades to local-only if Firebase is unreachable.
+function ensureFirebase(){
+ if(CLOUD_OK) return true;
+ if(typeof firebase === 'undefined') return false;
+ try {
+  if(firebase.apps && firebase.apps.length > 0){
+   DB = firebase.database();
+   CLOUD_OK = true;
+   return true;
+  }
+  firebase.initializeApp(firebaseConfig);
+  DB = firebase.database();
+  CLOUD_OK = true;
+  console.log('Firebase ready ✓');
+  return true;
+ } catch(e) {
+  console.warn('Firebase init failed:', e.message);
+  return false;
+ }
+}
+
+// ===== PLAYER PROFILE =====
+// Each player has their own progress, synced to Firebase by name.
+// Falls back to localStorage if offline or Firebase unreachable.
+let PLAYER = null; // current player name, lowercased for key
+let PLAYER_DISPLAY = null; // capitalized for display
+const DEFAULT_PLAYERS = ['James','Abigail','Mom','Dad'];
+
+function sanitizeName(name){
+ // Firebase keys can't contain . # $ [ ] / so strip them. Also lowercase for matching.
+ return (name||'').trim().toLowerCase().replace(/[.#$\[\]\/\s]/g,'-').slice(0,30);
+}
+function displayName(name){
+ const t = (name||'').trim();
+ return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function showPlayerPicker(){
+ const overlay = document.getElementById('picker-overlay');
+ overlay.style.display = 'flex';
+ const btns = document.getElementById('player-buttons');
+ btns.innerHTML = '';
+ DEFAULT_PLAYERS.forEach(name=>{
+  const b = document.createElement('button');
+  b.className = 'btn';
+  b.style.cssText = 'padding:18px;font-size:1.1em';
+  b.textContent = name;
+  b.onclick = ()=>selectPlayer(name);
+  btns.appendChild(b);
+ });
+ document.getElementById('custom-go').onclick = ()=>{
+  const v = document.getElementById('custom-name').value.trim();
+  if(v.length>0) selectPlayer(v);
+ };
+ document.getElementById('custom-name').onkeydown = e=>{
+  if(e.key==='Enter') document.getElementById('custom-go').click();
+ };
+}
+
+function selectPlayer(name){
+ PLAYER = sanitizeName(name);
+ PLAYER_DISPLAY = displayName(name);
+ try{ localStorage.setItem('jamesmath_player', PLAYER); localStorage.setItem('jamesmath_player_display', PLAYER_DISPLAY); }catch(e){}
+ const status = document.getElementById('picker-status');
+ status.textContent = 'Loading your progress…';
+ // Load progress for this player from Firebase
+ loadProgressFromCloud().then(()=>{
+  document.getElementById('picker-overlay').style.display = 'none';
+  renderChapters();
+ }).catch(err=>{
+  console.warn('Cloud load failed, using local:', err);
+  document.getElementById('picker-overlay').style.display = 'none';
+  renderChapters();
+ });
+}
+
+function switchPlayer(){
+ PLAYER = null;
+ PLAYER_DISPLAY = null;
+ STORE.data = null;
+ try{ localStorage.removeItem('jamesmath_player'); localStorage.removeItem('jamesmath_player_display'); }catch(e){}
+ showPlayerPicker();
+}
+
+// ===== PROGRESS STORAGE (cloud + local fallback) =====
 const STORE = {data:null};
+const EMPTY_PROGRESS = ()=>({xp:0,stars:0,streak:0,done:{},best:{}});
+
 function loadProgress(){
  if(STORE.data) return STORE.data;
+ // Try local cache first for fast render
  try{
-  const raw=window.localStorage&&localStorage.getItem('jamesmath');
-  STORE.data = raw?JSON.parse(raw):{xp:0,stars:0,streak:0,done:{},best:{}};
- }catch(e){STORE.data={xp:0,stars:0,streak:0,done:{},best:{}}}
+  const key = PLAYER ? 'jamesmath_'+PLAYER : 'jamesmath';
+  const raw = window.localStorage && localStorage.getItem(key);
+  STORE.data = raw?JSON.parse(raw):EMPTY_PROGRESS();
+ }catch(e){STORE.data=EMPTY_PROGRESS();}
  return STORE.data;
 }
+
+function loadProgressFromCloud(){
+ if(!ensureFirebase() || !PLAYER) return Promise.resolve();
+ return DB.ref('players/'+PLAYER).once('value').then(snap=>{
+  const val = snap.val();
+  if(val){
+   STORE.data = Object.assign(EMPTY_PROGRESS(), val);
+   // Also cache locally for offline access
+   try{localStorage.setItem('jamesmath_'+PLAYER, JSON.stringify(STORE.data))}catch(e){}
+  } else {
+   // No cloud data yet — use whatever's in localStorage or start fresh
+   loadProgress();
+  }
+ });
+}
+
 function saveProgress(){
- try{localStorage.setItem('jamesmath',JSON.stringify(STORE.data))}catch(e){}
+ if(!STORE.data) return;
+ // Always save locally first (fast, works offline)
+ try{
+  const key = PLAYER ? 'jamesmath_'+PLAYER : 'jamesmath';
+  localStorage.setItem(key, JSON.stringify(STORE.data));
+ }catch(e){}
+ // Then push to cloud (fire and forget)
+ if(ensureFirebase() && PLAYER){
+  try{ DB.ref('players/'+PLAYER).set(STORE.data); }catch(e){console.warn('cloud save failed', e);}
+ }
 }
 
 // ===== CONTENT POOLS =====
@@ -669,6 +820,11 @@ function isUnlocked(ch){
 
 function renderChapters(){
  const p = loadProgress();
+ // Show player badge if a player is selected
+ if(PLAYER_DISPLAY){
+  document.getElementById('player-badge').style.display = 'flex';
+  document.getElementById('player-name').textContent = PLAYER_DISPLAY;
+ }
  document.getElementById('s-xp').textContent = p.xp;
  document.getElementById('s-streak').textContent = p.streak;
  document.getElementById('s-stars').textContent = p.stars;
@@ -979,8 +1135,33 @@ function confettiBurst(){
 }
 
 // ===== INIT =====
-loadProgress();
-renderChapters();
+function init(){
+ // Check if there's a saved player on this device
+ let savedPlayer = null, savedDisplay = null;
+ try{
+  savedPlayer = localStorage.getItem('jamesmath_player');
+  savedDisplay = localStorage.getItem('jamesmath_player_display');
+ }catch(e){}
+ if(savedPlayer){
+  // Auto-resume that player and pull from cloud
+  PLAYER = savedPlayer;
+  PLAYER_DISPLAY = savedDisplay || displayName(savedPlayer);
+  // Render immediately from local cache (fast), then update from cloud
+  loadProgress();
+  renderChapters();
+  loadProgressFromCloud().then(()=>renderChapters()).catch(()=>{});
+ } else {
+  // No player yet — show the picker
+  showPlayerPicker();
+ }
+}
+
+// Wait for the full page (including external Firebase scripts) to load before initializing.
+if(document.readyState === 'complete'){
+ init();
+} else {
+ window.addEventListener('load', init);
+}
 </script>
 </body>
 </html>
