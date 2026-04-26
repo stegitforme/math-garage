@@ -1188,12 +1188,14 @@ function renderGuidedStep(){
  if(op === '+'){
   let carryRow = '';
   for(let i=0; i<maxLen; i++){
-   const pastStep = maxLen - 1 - i; // which step solved this column
-   if(pastStep < step && columns[columns.length-1-pastStep] && columns[columns.length-1-pastStep].newCarry){
-    carryRow += `<span class="guided-carry">¹</span>`;
-   } else {
-    carryRow += '&nbsp;';
+   const stepThatCarriesHere = maxLen - 1 - i;
+   const stepThatProducedIt = stepThatCarriesHere - 1;
+   let showCarry = false;
+   if(stepThatProducedIt >= 0 && stepThatProducedIt < step){
+    const producerCol = columns[columns.length - 1 - stepThatProducedIt];
+    if(producerCol && producerCol.newCarry) showCarry = true;
    }
+   carryRow += `<span class="guided-col" style="color:var(--accent2);font-size:.75em;padding:2px 8px">${showCarry?'¹':'&nbsp;'}</span>`;
   }
   html += `<div class="row">&nbsp;${carryRow}</div>`;
  }
@@ -1402,19 +1404,27 @@ function getWalkthrough(q){
     if(colSum >= 10) carries[i] = 1;
    }
 
-   // Build carry row
+   // Build carry row — carries[i+1] is the carry flowing INTO column i from the right
    let carryRow = '';
    for(let i=0; i<maxLen; i++){
-    carryRow += carries[i] ? `<span class="carry">${carries[i]}</span>` : '&nbsp;';
+    const carryHere = carries[i+1] || 0;
+    carryRow += carryHere ? `<span class="carry" style="display:inline-block;width:1.2em;text-align:center">${carryHere}</span>` : `<span style="display:inline-block;width:1.2em">&nbsp;</span>`;
    }
 
    // Build visual
    let html = `<div class="wt">`;
    if(carries.some(c=>c>0)) html += `<div class="row">&nbsp;${carryRow}</div>`;
-   html += `<div class="row">&nbsp;${aStr.split('').join('&nbsp;')}</div>`;
-   html += `<div class="row"><span class="op">+</span>${bStr.padStart(maxLen,'0').replace(/^0+/,' ').split('').join('&nbsp;').replace(/ /g,'&nbsp;')}</div>`;
-   html += `<div class="wt-line">${'&nbsp;&nbsp;'.repeat(maxLen)}</div>`;
-   html += `<div class="row ans-row">&nbsp;${sStr.split('').join('&nbsp;')}</div>`;
+   // Use consistent digit spacing
+   let topDigits = '';
+   for(let i=0; i<maxLen; i++) topDigits += `<span style="display:inline-block;width:1.2em;text-align:center">${aDigits[i]||'&nbsp;'}</span>`;
+   html += `<div class="row">&nbsp;${topDigits}</div>`;
+   let botDigits = '';
+   for(let i=0; i<maxLen; i++) botDigits += `<span style="display:inline-block;width:1.2em;text-align:center">${bDigits[i]||'&nbsp;'}</span>`;
+   html += `<div class="row"><span class="op">+</span>${botDigits}</div>`;
+   html += `<div class="wt-line">${'&nbsp;'.repeat(maxLen*2+1)}</div>`;
+   let ansDigits = '';
+   for(let i=0; i<sStr.length; i++) ansDigits += `<span style="display:inline-block;width:1.2em;text-align:center">${sDigits[i]}</span>`;
+   html += `<div class="row ans-row">&nbsp;${ansDigits}</div>`;
    html += `</div>`;
 
    // Build step-by-step text explanation
