@@ -125,6 +125,21 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 .tip{background:rgba(255,204,0,.1);border-left:3px solid var(--accent2);
  padding:10px 14px;border-radius:6px;font-size:.9em;margin-top:10px;color:#ffe082}
 
+/* Visual walkthrough for carrying/borrowing */
+.wt{font-family:"SF Mono",Menlo,monospace;font-size:1.3em;line-height:1.6;
+ display:inline-block;text-align:right;margin:10px auto;letter-spacing:3px}
+.wt .carry{color:var(--accent2);font-size:.7em;vertical-align:super;font-weight:800}
+.wt .borrow{color:var(--bad);font-size:.7em;text-decoration:line-through;vertical-align:super}
+.wt .new-digit{color:var(--ok);font-weight:900}
+.wt .row{display:block;white-space:nowrap}
+.wt .op{color:var(--accent2);font-weight:800}
+.wt .wt-line{display:block;border-top:3px solid var(--accent2);margin:2px 0}
+.wt .ans-row{color:var(--ok);font-weight:900}
+.wt-steps{margin-top:12px;font-family:inherit;font-size:.85em;line-height:1.8;letter-spacing:0}
+.wt-step{margin-bottom:6px}
+.wt-step .col-label{display:inline-block;background:var(--accent2);color:#000;
+ padding:1px 8px;border-radius:4px;font-size:.8em;font-weight:800;margin-right:6px}
+
 @media(max-width:600px){
  h1{font-size:1.8em}
  .dashboard{grid-template-columns:repeat(2,1fr)}
@@ -1054,48 +1069,132 @@ function getTip(q){
 // Build a step-by-step walkthrough using the real numbers from the question
 function getWalkthrough(q){
  const p = q.problem;
- // Addition walkthrough
+
+ // ===== ADDITION VISUAL WALKTHROUGH =====
  if(p.includes('+') && !p.includes('___')){
   const m = p.match(/(\d+)\s*\+\s*(\d+)/);
   if(m){
    const a = parseInt(m[1]), b = parseInt(m[2]);
    const sum = a + b;
-   const ao = a%10, bo = b%10;
-   const at = Math.floor(a/10)%10, bt = Math.floor(b/10)%10;
-   const ah = Math.floor(a/100)%10, bh = Math.floor(b/100)%10;
-   let steps = `<b>Step 1:</b> Add the ones place: ${ao} + ${bo} = ${ao+bo}`;
-   if(ao+bo >= 10) steps += ` (write ${(ao+bo)%10}, carry 1)`;
-   steps += `<br><b>Step 2:</b> Add the tens place: ${at} + ${bt}`;
-   const carry1 = ao+bo >= 10 ? 1 : 0;
-   if(carry1) steps += ` + 1 (carried)`;
-   steps += ` = ${at+bt+carry1}`;
-   if(at+bt+carry1 >= 10) steps += ` (write ${(at+bt+carry1)%10}, carry 1)`;
-   if(a>=100 || b>=100){
-    const carry2 = at+bt+carry1 >= 10 ? 1 : 0;
-    steps += `<br><b>Step 3:</b> Add the hundreds place: ${ah} + ${bh}`;
-    if(carry2) steps += ` + 1 (carried)`;
-    steps += ` = ${ah+bh+carry2}`;
+   // Break into digit arrays (right-aligned)
+   const aStr = String(a), bStr = String(b), sStr = String(sum);
+   const maxLen = Math.max(aStr.length, bStr.length, sStr.length);
+   const aDigits = aStr.padStart(maxLen,'0').split('').map(Number);
+   const bDigits = bStr.padStart(maxLen,'0').split('').map(Number);
+   const sDigits = sStr.padStart(maxLen,'0').split('').map(Number);
+
+   // Calculate carries
+   const carries = new Array(maxLen+1).fill(0);
+   for(let i=maxLen-1; i>=0; i--){
+    const colSum = aDigits[i] + bDigits[i] + carries[i+1];
+    if(colSum >= 10) carries[i] = 1;
    }
-   steps += `<br><b>Answer:</b> ${a} + ${b} = <b>${sum}</b>`;
-   return steps;
+
+   // Build carry row
+   let carryRow = '';
+   for(let i=0; i<maxLen; i++){
+    carryRow += carries[i] ? `<span class="carry">${carries[i]}</span>` : '&nbsp;';
+   }
+
+   // Build visual
+   let html = `<div class="wt">`;
+   if(carries.some(c=>c>0)) html += `<div class="row">&nbsp;${carryRow}</div>`;
+   html += `<div class="row">&nbsp;${aStr.split('').join('&nbsp;')}</div>`;
+   html += `<div class="row"><span class="op">+</span>${bStr.padStart(maxLen,'0').replace(/^0+/,' ').split('').join('&nbsp;').replace(/ /g,'&nbsp;')}</div>`;
+   html += `<div class="wt-line">${'&nbsp;&nbsp;'.repeat(maxLen)}</div>`;
+   html += `<div class="row ans-row">&nbsp;${sStr.split('').join('&nbsp;')}</div>`;
+   html += `</div>`;
+
+   // Build step-by-step text explanation
+   const colNames = ['ones','tens','hundreds','thousands'];
+   html += `<div class="wt-steps">`;
+   let carry = 0;
+   for(let i=maxLen-1; i>=0; i--){
+    const colName = colNames[maxLen-1-i] || `col ${maxLen-i}`;
+    const da = aDigits[i], db = bDigits[i];
+    const colSum = da + db + carry;
+    const write = colSum % 10;
+    const newCarry = colSum >= 10 ? 1 : 0;
+    html += `<div class="wt-step"><span class="col-label">${colName}</span> ${da} + ${db}`;
+    if(carry) html += ` + ${carry} <span style="color:var(--accent2)">(carried)</span>`;
+    html += ` = ${colSum}`;
+    if(newCarry) html += ` → write <b>${write}</b>, carry <b style="color:var(--accent2)">1</b>`;
+    html += `</div>`;
+    carry = newCarry;
+   }
+   html += `<div class="wt-step" style="margin-top:8px"><b>Answer: ${a} + ${b} = <span style="color:var(--ok)">${sum}</span></b></div>`;
+   html += `</div>`;
+   return html;
   }
  }
- // Subtraction walkthrough
+
+ // ===== SUBTRACTION VISUAL WALKTHROUGH =====
  if(p.includes('-')){
   const m = p.match(/(\d+)\s*-\s*(\d+)/);
   if(m){
    const a = parseInt(m[1]), b = parseInt(m[2]);
    const diff = a - b;
-   let steps = `Start with <b>${a}</b> and take away <b>${b}</b>.<br>`;
-   steps += `<b>Step 1:</b> Line up the numbers by place value (ones, tens, hundreds).<br>`;
-   const ao = a%10, bo = b%10;
-   if(ao >= bo){
-    steps += `<b>Step 2:</b> Ones: ${ao} - ${bo} = ${ao-bo}<br>`;
-   } else {
-    steps += `<b>Step 2:</b> Ones: ${ao} is less than ${bo}, so borrow 1 from the tens. Now do ${ao+10} - ${bo} = ${ao+10-bo}<br>`;
+   const aStr = String(a), bStr = String(b), dStr = String(diff);
+   const maxLen = Math.max(aStr.length, bStr.length, dStr.length);
+   const aDigits = aStr.padStart(maxLen,'0').split('').map(Number);
+   const bDigits = bStr.padStart(maxLen,'0').split('').map(Number);
+
+   // Figure out borrows
+   const borrows = new Array(maxLen).fill(false);
+   const workingA = [...aDigits];
+   for(let i=maxLen-1; i>=0; i--){
+    if(workingA[i] < bDigits[i]){
+     borrows[i] = true;
+     workingA[i] += 10;
+     // Find next non-zero column to borrow from
+     for(let j=i-1; j>=0; j--){
+      workingA[j] -= 1;
+      if(workingA[j] >= 0) break;
+      workingA[j] += 10;
+     }
+    }
    }
-   steps += `<b>Answer:</b> ${a} - ${b} = <b>${diff}</b>`;
-   return steps;
+
+   // Build visual — show original number with borrow marks
+   let topRow = '&nbsp;';
+   for(let i=0; i<maxLen; i++){
+    if(borrows[i]){
+     topRow += `<span class="borrow">${aDigits[i]}</span><span class="new-digit">${workingA[i]}</span>`;
+    } else if(workingA[i] !== aDigits[i]){
+     topRow += `<span class="borrow">${aDigits[i]}</span><span class="new-digit">${workingA[i]}</span>`;
+    } else {
+     topRow += aDigits[i];
+    }
+    if(i < maxLen-1) topRow += '&nbsp;';
+   }
+
+   let html = `<div class="wt">`;
+   html += `<div class="row">${topRow}</div>`;
+   html += `<div class="row"><span class="op">−</span>${bStr.padStart(maxLen,' ').split('').join('&nbsp;').replace(/ /g,'&nbsp;')}</div>`;
+   html += `<div class="wt-line">${'&nbsp;&nbsp;'.repeat(maxLen)}</div>`;
+   html += `<div class="row ans-row">&nbsp;${dStr.padStart(maxLen,' ').split('').join('&nbsp;').replace(/ /g,'&nbsp;')}</div>`;
+   html += `</div>`;
+
+   // Step-by-step text
+   const colNames = ['ones','tens','hundreds','thousands'];
+   html += `<div class="wt-steps">`;
+   for(let i=maxLen-1; i>=0; i--){
+    const colName = colNames[maxLen-1-i] || `col ${maxLen-i}`;
+    const da = aDigits[i], db = bDigits[i], wa = workingA[i];
+    const result = wa - db;
+    html += `<div class="wt-step"><span class="col-label">${colName}</span> `;
+    if(borrows[i]){
+     html += `${da} is less than ${db}, so <b style="color:var(--accent2)">borrow 1</b> from the tens → ${wa} − ${db} = ${result}`;
+    } else if(wa !== da){
+     html += `${wa} − ${db} = ${result} <span style="color:var(--muted)">(was ${da}, gave 1 away)</span>`;
+    } else {
+     html += `${da} − ${db} = ${result}`;
+    }
+    html += `</div>`;
+   }
+   html += `<div class="wt-step" style="margin-top:8px"><b>Answer: ${a} − ${b} = <span style="color:var(--ok)">${diff}</span></b></div>`;
+   html += `</div>`;
+   return html;
   }
  }
  // Missing addend: "47 + ___ = 73"
