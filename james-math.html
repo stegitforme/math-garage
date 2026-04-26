@@ -151,6 +151,27 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 @keyframes flame{from{transform:scale(1)}to{transform:scale(1.2)}}
 
 .confetti{position:fixed;width:10px;height:10px;pointer-events:none;z-index:1000}
+
+/* Training mode toggle */
+.mode-toggle{display:flex;align-items:center;justify-content:center;gap:10px;
+ margin:10px 0;font-size:.9em}
+.toggle-switch{position:relative;width:50px;height:28px;background:var(--border);
+ border-radius:14px;cursor:pointer;transition:background .3s;border:none;padding:0}
+.toggle-switch.on{background:var(--ok)}
+.toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;
+ background:#fff;border-radius:50%;transition:transform .3s}
+.toggle-switch.on::after{transform:translateX(22px)}
+.mode-label{color:var(--muted);font-weight:600}
+.mode-label.active{color:var(--ok)}
+
+/* Guided column-by-column mode */
+.guided-col{display:inline-block;text-align:center;padding:4px 8px;border-radius:8px;
+ margin:0 2px;font-family:"SF Mono",Menlo,monospace;font-size:1.3em;font-weight:800}
+.guided-col.active{background:var(--accent2);color:#000}
+.guided-col.done{color:var(--ok)}
+.guided-col.waiting{color:var(--muted)}
+.guided-carry{color:var(--accent2);font-size:.8em;font-weight:800}
+.guided-prompt{text-align:center;margin:14px 0;font-size:1.1em;font-weight:700;color:var(--accent2)}
 </style>
 </head>
 <body>
@@ -175,6 +196,11 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 <div id="home">
  <div id="xp-title-bar" style="text-align:center;margin-bottom:12px;display:none">
   <span class="xp-title" id="xp-title-text"></span>
+ </div>
+ <div class="mode-toggle" id="mode-toggle" style="display:none">
+  <span class="mode-label" id="mode-label-off">Normal</span>
+  <button class="toggle-switch" id="training-toggle" onclick="toggleTrainingMode()"></button>
+  <span class="mode-label" id="mode-label-on">🎓 Training Mode</span>
  </div>
  <button class="daily-btn" id="daily-btn" onclick="startDaily()" style="display:none">🎯 Daily Challenge — 5 Random Questions</button>
  <div class="chapters" id="chapters"></div>
@@ -314,7 +340,63 @@ function switchPlayer(){
 
 // ===== PROGRESS STORAGE (cloud + local fallback) =====
 const STORE = {data:null};
-const EMPTY_PROGRESS = ()=>({xp:0,stars:0,streak:0,done:{},best:{}});
+const EMPTY_PROGRESS = ()=>({xp:0,stars:0,streak:0,done:{},best:{},training:true});
+
+// ===== TRAINING MODE =====
+function isTrainingMode(){
+ const p = loadProgress();
+ return p.training !== false; // default to ON for new players
+}
+function toggleTrainingMode(){
+ const p = loadProgress();
+ p.training = !isTrainingMode();
+ saveProgress();
+ updateToggleUI();
+}
+function updateToggleUI(){
+ const on = isTrainingMode();
+ const btn = document.getElementById('training-toggle');
+ const labelOff = document.getElementById('mode-label-off');
+ const labelOn = document.getElementById('mode-label-on');
+ if(btn){
+  btn.className = 'toggle-switch' + (on ? ' on' : '');
+  labelOff.className = 'mode-label' + (!on ? ' active' : '');
+  labelOn.className = 'mode-label' + (on ? ' active' : '');
+ }
+}
+
+// XP values based on difficulty and training mode
+function getXP(q){
+ const p = q.problem || '';
+ const training = isTrainingMode();
+ // Determine difficulty tier
+ let tier = 'medium'; // default
+ // Single digit (Math Facts)
+ const addSub = p.match(/^(\d+)\s*[+\-]\s*(\d+)$/);
+ if(addSub){
+  const a = parseInt(addSub[1]), b = parseInt(addSub[2]);
+  if(a<=9 && b<=9) tier = 'easy';
+  else if(a<=99 && b<=99) tier = 'medium';
+  else tier = 'hard';
+ }
+ // Word problems with big numbers
+ if(p.includes('= ?') && addSub){
+  const a = parseInt(addSub[1]);
+  if(a >= 100) tier = 'hard';
+ }
+ // Compare, round, place value = medium
+ if(p.includes('___') || p.toLowerCase().includes('round')) tier = 'medium';
+ // Boss level bonus
+ if(CURR && CURR.ch && CURR.ch.id === 'boss') tier = 'boss';
+
+ const xpTable = {
+  easy:   {training: 3, normal: 5},
+  medium: {training: 5, normal: 10},
+  hard:   {training: 8, normal: 15},
+  boss:   {training: 10, normal: 20},
+ };
+ return xpTable[tier][training ? 'training' : 'normal'];
+}
 
 function loadProgress(){
  if(STORE.data) return STORE.data;
@@ -867,8 +949,10 @@ function gen_missing(){
 
 // ===== CHAPTERS =====
 const CHAPTERS = [
- {id:'facts',icon:'⚡',title:'Math Facts Blitz',sub:'single digit · memorize these!',
-  unlocked:true,gens:[gen_add1,gen_sub1,gen_add1,gen_sub1,gen_add1]},
+ {id:'facts_add',icon:'⚡',title:'Math Facts: Adding',sub:'single digit addition · memorize!',
+  unlocked:true,gens:[gen_add1,gen_add1,gen_add1,gen_add1,gen_add1]},
+ {id:'facts_sub',icon:'⚡',title:'Math Facts: Subtracting',sub:'single digit subtraction · memorize!',
+  unlocked:true,gens:[gen_sub1,gen_sub1,gen_sub1,gen_sub1,gen_sub1]},
  {id:'warmup',icon:'🔥',title:'Warm-Up Garage',sub:'2-digit adding · easy',
   unlocked:true,gens:[gen_add2,gen_add2,gen_sub2,gen_add2,gen_sub2]},
  {id:'place',icon:'🏷️',title:'Place Value Pit Stop',sub:'thousands, hundreds, tens',
@@ -929,6 +1013,9 @@ function renderChapters(){
  } else {
   dailyBtn.style.display = 'none';
  }
+ // Show training mode toggle
+ document.getElementById('mode-toggle').style.display = 'flex';
+ updateToggleUI();
  const root = document.getElementById('chapters');
  root.innerHTML = '';
  CHAPTERS.forEach(ch=>{
@@ -976,6 +1063,16 @@ function renderQ(){
  const total = CURR.qs.length;
  document.getElementById('q-prog').textContent = `Question ${CURR.idx+1} of ${total} · Score: ${CURR.score}`;
  document.getElementById('qbar').style.width = (CURR.idx/total*100)+'%';
+
+ // Check if this is a multi-digit add/sub in training mode
+ const addSubMatch = q.problem.match(/^(\d+)\s*([+\-])\s*(\d+)$/);
+ const isMultiDigit = addSubMatch && (parseInt(addSubMatch[1]) >= 10 || parseInt(addSubMatch[3]) >= 10);
+ if(isTrainingMode() && isMultiDigit){
+  renderGuidedQ(q, addSubMatch);
+  return;
+ }
+
+ // Normal rendering
  const body = document.getElementById('q-body');
  let html = `
   <div class="scene">
@@ -1016,19 +1113,234 @@ function renderQ(){
  }
 }
 
+// ===== GUIDED COLUMN-BY-COLUMN MODE =====
+function renderGuidedQ(q, match){
+ const a = parseInt(match[1]), op = match[2], b = parseInt(match[3]);
+ const answer = op === '+' ? a + b : a - b;
+ const aStr = String(a), bStr = String(b), ansStr = String(Math.abs(answer));
+ const maxLen = Math.max(aStr.length, bStr.length);
+ const aDigits = aStr.padStart(maxLen,'0').split('').map(Number);
+ const bDigits = bStr.padStart(maxLen,'0').split('').map(Number);
+
+ // Pre-calculate all column results
+ const columns = [];
+ if(op === '+'){
+  let carry = 0;
+  for(let i=maxLen-1; i>=0; i--){
+   const colSum = aDigits[i] + bDigits[i] + carry;
+   const write = colSum % 10;
+   const newCarry = colSum >= 10 ? 1 : 0;
+   columns.unshift({da:aDigits[i], db:bDigits[i], carry, result:write, newCarry, colSum});
+   carry = newCarry;
+  }
+  if(carry) columns.unshift({da:0, db:0, carry, result:carry, newCarry:0, colSum:carry, extraDigit:true});
+ } else {
+  const workingA = [...aDigits];
+  for(let i=maxLen-1; i>=0; i--){
+   let borrow = false;
+   let wa = workingA[i];
+   if(wa < bDigits[i]){
+    borrow = true;
+    workingA[i] += 10;
+    wa = workingA[i];
+    for(let j=i-1; j>=0; j--){ workingA[j]-=1; if(workingA[j]>=0) break; workingA[j]+=10; }
+   }
+   columns.unshift({da:aDigits[i], db:bDigits[i], wa, borrow, result:wa-bDigits[i], origA:aDigits[i]});
+  }
+ }
+
+ // State for guided mode
+ CURR.guided = {q, op, a, b, answer, columns, aDigits, bDigits, maxLen, step:0, results:[], allCorrect:true};
+
+ renderGuidedStep();
+}
+
+function renderGuidedStep(){
+ const g = CURR.guided;
+ const {op, a, b, columns, aDigits, bDigits, maxLen, step, results} = g;
+ const body = document.getElementById('q-body');
+ const colNames = ['ones','tens','hundreds','thousands'];
+ // Current column index (right to left): step 0 = ones = index maxLen-1
+ const colIdx = maxLen - 1 - step;
+ const isExtraCarry = op==='+' && columns.length > maxLen && step >= maxLen;
+ const totalSteps = columns.length - (op==='+' && columns[0].extraDigit ? 0 : 0);
+ const realSteps = op==='+' ? columns.filter(c=>!c.extraDigit).length : columns.length;
+
+ if(step >= realSteps){
+  // All columns done — show final result
+  finishGuided();
+  return;
+ }
+
+ const col = columns[columns.length - 1 - step]; // columns are stored left-to-right, we go right-to-left
+ const colName = colNames[step] || `column ${step+1}`;
+
+ // Build the visual with highlighting
+ let html = `<div class="scene">
+  <div class="scene-title">📋 The Setup</div>
+  <div class="scene-text">${g.q.scene}</div>
+ </div>`;
+
+ // Show the stacked problem with current column highlighted
+ html += `<div class="problem"><div class="wt">`;
+
+ // Carry row (for addition)
+ if(op === '+'){
+  let carryRow = '';
+  for(let i=0; i<maxLen; i++){
+   const pastStep = maxLen - 1 - i; // which step solved this column
+   if(pastStep < step && columns[columns.length-1-pastStep] && columns[columns.length-1-pastStep].newCarry){
+    carryRow += `<span class="guided-carry">¹</span>`;
+   } else {
+    carryRow += '&nbsp;';
+   }
+  }
+  html += `<div class="row">&nbsp;${carryRow}</div>`;
+ }
+
+ // Top number row
+ let topRow = '&nbsp;';
+ for(let i=0; i<maxLen; i++){
+  const thisStep = maxLen - 1 - i;
+  const cls = thisStep === step ? 'active' : (thisStep < step ? 'done' : 'waiting');
+  topRow += `<span class="guided-col ${cls}">${aDigits[i]}</span>`;
+ }
+ html += `<div class="row">${topRow}</div>`;
+
+ // Bottom number row with operator
+ let botRow = `<span class="op" style="font-size:.9em">${op==='+'?'+':'−'}</span>`;
+ for(let i=0; i<maxLen; i++){
+  const thisStep = maxLen - 1 - i;
+  const cls = thisStep === step ? 'active' : (thisStep < step ? 'done' : 'waiting');
+  botRow += `<span class="guided-col ${cls}">${bDigits[i]}</span>`;
+ }
+ html += `<div class="row">${botRow}</div>`;
+ html += `<div class="wt-line">${'&nbsp;&nbsp;&nbsp;'.repeat(maxLen)}</div>`;
+
+ // Answer row (filled in as he goes)
+ let ansRow = '&nbsp;';
+ for(let i=0; i<maxLen; i++){
+  const thisStep = maxLen - 1 - i;
+  if(thisStep < step){
+   ansRow += `<span class="guided-col done">${results[thisStep]}</span>`;
+  } else if(thisStep === step){
+   ansRow += `<span class="guided-col active">?</span>`;
+  } else {
+   ansRow += `<span class="guided-col waiting">_</span>`;
+  }
+ }
+ html += `<div class="row">${ansRow}</div>`;
+ html += `</div></div>`; // close wt and problem
+
+ // Prompt for this column
+ if(op === '+'){
+  let prompt = `<b>${colName.toUpperCase()}:</b> What is ${col.da} + ${col.db}`;
+  if(col.carry) prompt += ` + ${col.carry} <span style="color:var(--accent2)">(carried)</span>`;
+  prompt += `?`;
+  html += `<div class="guided-prompt">${prompt}</div>`;
+ } else {
+  let prompt = `<b>${colName.toUpperCase()}:</b> `;
+  if(col.borrow){
+   prompt += `${col.origA} is less than ${col.db}... <b style="color:var(--accent2)">borrow 1!</b> Now what is ${col.wa} − ${col.db}?`;
+  } else {
+   prompt += `What is ${col.da} − ${col.db}?`;
+  }
+  html += `<div class="guided-prompt">${prompt}</div>`;
+ }
+
+ // Answer input — multiple choice with small numbers
+ const correctResult = col.result;
+ const choices = makeChoices(correctResult, 4, op==='+'?18:9);
+ html += '<div class="choices">';
+ choices.forEach(c=>{
+  html += `<button class="choice" data-v="${c}">${c}</button>`;
+ });
+ html += '</div>';
+ html += '<div class="feedback" id="fb"></div>';
+
+ body.innerHTML = html;
+ body.querySelectorAll('.choice').forEach(btn=>{
+  btn.onclick = ()=> handleGuidedAnswer(btn, correctResult, col);
+ });
+}
+
+function handleGuidedAnswer(btn, correct, col){
+ const val = parseInt(btn.dataset.v);
+ const fb = document.getElementById('fb');
+ const g = CURR.guided;
+
+ if(val === correct){
+  btn.classList.add('right');
+  document.querySelectorAll('.choice').forEach(b=>b.disabled=true);
+  fb.className = 'feedback ok show';
+
+  let msg = `<b>✅ Yes!</b> `;
+  if(g.op === '+'){
+   msg += `${col.da} + ${col.db}${col.carry?' + '+col.carry:''} = ${col.colSum}`;
+   if(col.newCarry) msg += `. Write <b>${col.result}</b>, carry <b style="color:var(--accent2)">1</b> to the next column!`;
+  } else {
+   if(col.borrow) msg += `After borrowing: ${col.wa} − ${col.db} = ${col.result}`;
+   else msg += `${col.da} − ${col.db} = ${col.result}`;
+  }
+
+  g.results[g.step] = col.result;
+  g.step++;
+  msg += `<div style="margin-top:10px"><button class="btn" onclick="renderGuidedStep()">Next column →</button></div>`;
+  fb.innerHTML = msg;
+ } else {
+  btn.classList.add('wrong');
+  fb.className = 'feedback no show';
+  g.allCorrect = false;
+  let hint = '';
+  if(g.op === '+'){
+   hint = `Try again: ${col.da} + ${col.db}${col.carry?' + '+col.carry:''} = ?`;
+  } else {
+   hint = col.borrow ? `Remember, we borrowed! ${col.wa} − ${col.db} = ?` : `${col.da} − ${col.db} = ?`;
+  }
+  fb.innerHTML = `<b>❌ Not quite!</b> ${hint}`;
+  setTimeout(()=>{btn.classList.remove('wrong');btn.disabled=false;fb.classList.remove('show')},1200);
+ }
+}
+
+function finishGuided(){
+ const g = CURR.guided;
+ const q = g.q;
+ const p = loadProgress();
+ const xpEarned = getXP(q);
+ p.xp += xpEarned;
+ p.streak += 1;
+ if(p.streak>0 && p.streak%5===0) p.xp += 25;
+ CURR.score += 1;
+ saveProgress();
+ document.getElementById('s-xp').textContent = p.xp;
+ document.getElementById('s-streak').textContent = p.streak;
+
+ const body = document.getElementById('q-body');
+ let html = `<div class="feedback ok show" style="text-align:center">
+  <b>🎉 You solved it column by column!</b><br>
+  <div class="problem" style="margin:14px auto;display:inline-block">${formatProblem(q.problem)}</div>
+  <div style="font-size:1.3em;font-weight:900;color:var(--ok);margin:8px 0">${g.a} ${g.op==='+'?'+':'−'} ${g.b} = ${g.answer}</div>
+  <div>+${xpEarned} XP</div>`;
+ if(q.fact) html += `<br><div>💡 ${q.fact}</div>`;
+ html += `<div style="margin-top:14px"><button class="btn" onclick="nextQ()">Next →</button></div>`;
+ html += `</div>`;
+ body.innerHTML = html;
+}
+
 function handleAnswer(val, q, btn){
  const correct = String(q.answer)===String(val);
  const fb = document.getElementById('fb');
  const p = loadProgress();
  if(correct){
   p.streak += 1;
-  p.xp += 10;
+  const xpEarned = getXP(q);
+  p.xp += xpEarned;
   if(p.streak>0 && p.streak%5===0) p.xp += 25; // streak bonus
   CURR.score += 1;
   if(btn) btn.classList.add('right');
   document.querySelectorAll('.choice').forEach(b=>b.disabled=true);
   fb.className = 'feedback ok show';
-  let msg = `<b>✅ CORRECT!</b> +10 XP`;
+  let msg = `<b>✅ CORRECT!</b> +${xpEarned} XP`;
   if(p.streak>0 && p.streak%5===0) msg += ` · 🔥 ${p.streak} streak bonus +25!`;
   if(q.fact) msg += `<br><br>💡 ${q.fact}`;
   if(q.bibleVerse) msg += `<div class="verse">"${q.bibleVerse.t}"<span class="verse-ref">— ${q.bibleVerse.r}</span></div>`;
