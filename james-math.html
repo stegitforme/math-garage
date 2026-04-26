@@ -67,8 +67,18 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 .problem{font-size:1.6em;font-weight:800;text-align:center;margin:18px 0;
  padding:18px;background:var(--bg);border-radius:12px;
  font-family:"SF Mono",Menlo,monospace}
-.stack{display:inline-block;text-align:right;font-size:1.4em;line-height:1.3}
-.stack .op{display:inline-block;width:1em;text-align:left}
+.stack{display:inline-block;text-align:right;font-size:1.2em;line-height:1.5;
+ font-family:"SF Mono",Menlo,monospace;letter-spacing:2px}
+.stack .row{display:block;white-space:nowrap}
+.stack .op{display:inline-block;width:1.2em;text-align:left;color:var(--accent2)}
+.stack .line{display:block;border-top:3px solid var(--accent2);margin:4px 0}
+
+.daily-btn{background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;border:none;
+ padding:16px 24px;font-size:1.05em;font-weight:800;border-radius:12px;cursor:pointer;
+ font-family:inherit;text-transform:uppercase;letter-spacing:1px;transition:all .15s;
+ display:block;width:100%;margin-bottom:16px;text-align:center}
+.daily-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(255,107,0,.4)}
+.xp-title{color:var(--accent2);font-weight:800;font-size:.85em}
 
 .choices{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .choice{background:var(--card2);border:2px solid var(--border);color:var(--text);
@@ -148,6 +158,10 @@ h1{font-size:2.4em;background:linear-gradient(135deg,#ff3030,#ffcc00);
 </div>
 
 <div id="home">
+ <div id="xp-title-bar" style="text-align:center;margin-bottom:12px;display:none">
+  <span class="xp-title" id="xp-title-text"></span>
+ </div>
+ <button class="daily-btn" id="daily-btn" onclick="startDaily()" style="display:none">🎯 Daily Challenge — 5 Random Questions</button>
  <div class="chapters" id="chapters"></div>
 </div>
 
@@ -435,6 +449,25 @@ function makeChoices(correct, spread=10, maxVal=null){
 // ===== PROBLEM GENERATORS =====
 // Each generator returns {scene, problem, answer, choices?, type}
 // type: 'mc' (multiple choice) or 'input'
+
+// Render addition/subtraction problems vertically (stacked), others as-is
+function formatProblem(problem){
+ // Match patterns like "234 + 567" or "890 - 123"
+ const m = problem.match(/^(\d+)\s*([+\-])\s*(\d+)$/);
+ if(m){
+  const a = m[1], op = m[2], b = m[3];
+  const maxLen = Math.max(a.length, b.length);
+  const padA = a.padStart(maxLen+1); // +1 for the operator column
+  const padB = b.padStart(maxLen);
+  return `<div class="stack">` +
+   `<div class="row">${padA.replace(/ /g,'&nbsp;')}</div>` +
+   `<div class="row"><span class="op">${op}</span>${padB.replace(/ /g,'&nbsp;')}</div>` +
+   `<div class="line">${'&nbsp;'.repeat(maxLen+1)}</div>` +
+   `</div>`;
+ }
+ // For everything else (Round, compare, place value, missing addend) return as-is
+ return problem;
+}
 
 function gen_add2(){ // 2-digit + 2-digit, no regrouping (warm-up)
  const car1 = pick(CARS);
@@ -784,27 +817,27 @@ function gen_missing(){
 // ===== CHAPTERS =====
 const CHAPTERS = [
  {id:'warmup',icon:'🔥',title:'Warm-Up Garage',sub:'2-digit adding · easy',
-  unlocked:true,gens:[gen_add2,gen_add2,gen_sub2]},
+  unlocked:true,gens:[gen_add2,gen_add2,gen_sub2,gen_add2,gen_sub2]},
  {id:'place',icon:'🏷️',title:'Place Value Pit Stop',sub:'thousands, hundreds, tens',
-  unlocked:true,gens:[gen_place_value,gen_place_value,gen_compare]},
+  unlocked:true,gens:[gen_place_value,gen_place_value,gen_compare,gen_place_value,gen_compare]},
  {id:'add3easy',icon:'🏗️',title:'Skyscraper Stacker',sub:'3-digit adding · easy',
-  needs:['warmup'],gens:[gen_add3_easy,gen_add3_easy,gen_add3_easy]},
+  needs:['warmup'],gens:[gen_add3_easy,gen_add3_easy,gen_add3_easy,gen_add3_easy,gen_add3_easy]},
  {id:'add3hard',icon:'🏎️',title:'Turbo Adding',sub:'3-digit · regrouping',
-  needs:['add3easy'],gens:[gen_add3_regroup,gen_add3_regroup,gen_add3_regroup]},
+  needs:['add3easy'],gens:[gen_add3_regroup,gen_add3_regroup,gen_add3_regroup,gen_add3_regroup,gen_add3_regroup]},
  {id:'sub3easy',icon:'🏁',title:'Race to Zero',sub:'3-digit subtracting · easy',
-  needs:['warmup'],gens:[gen_sub3_easy,gen_sub3_easy,gen_sub3_easy]},
+  needs:['warmup'],gens:[gen_sub3_easy,gen_sub3_easy,gen_sub3_easy,gen_sub3_easy,gen_sub3_easy]},
  {id:'sub3hard',icon:'💥',title:'Crash Test Subtracting',sub:'3-digit · borrowing',
-  needs:['sub3easy'],gens:[gen_sub3_borrow,gen_sub3_borrow,gen_sub3_borrow]},
+  needs:['sub3easy'],gens:[gen_sub3_borrow,gen_sub3_borrow,gen_sub3_borrow,gen_sub3_borrow,gen_sub3_borrow]},
  {id:'round',icon:'🎯',title:'Estimation Station',sub:'rounding to 10 & 100',
-  needs:['place'],gens:[gen_round,gen_round,gen_round]},
+  needs:['place'],gens:[gen_round,gen_round,gen_round,gen_round,gen_round]},
  {id:'compare',icon:'⚖️',title:'Animal Showdown',sub:'> < = comparing',
-  needs:['place'],gens:[gen_compare,gen_compare,gen_compare]},
+  needs:['place'],gens:[gen_compare,gen_compare,gen_compare,gen_compare,gen_compare]},
  {id:'missing',icon:'🧩',title:'Missing Number Mystery',sub:'find the gap',
-  needs:['add3easy'],gens:[gen_missing,gen_missing,gen_missing]},
+  needs:['add3easy'],gens:[gen_missing,gen_missing,gen_missing,gen_missing,gen_missing]},
  {id:'word_easy',icon:'📖',title:'Bible Word Problems',sub:'easy storytelling math',
-  needs:['warmup'],gens:[gen_word_easy,gen_word_easy,gen_word_easy]},
+  needs:['warmup'],gens:[gen_word_easy,gen_word_easy,gen_word_easy,gen_word_easy,gen_word_easy]},
  {id:'word_hard',icon:'🏆',title:'Champion Word Problems',sub:'harder real-world',
-  needs:['add3hard','sub3hard'],gens:[gen_word_hard,gen_word_hard,gen_word_hard]},
+  needs:['add3hard','sub3hard'],gens:[gen_word_hard,gen_word_hard,gen_word_hard,gen_word_hard,gen_word_hard]},
  {id:'boss',icon:'👑',title:'BOSS LEVEL',sub:'all skills · 10 questions',
   needs:['add3hard','sub3hard','round','compare','missing'],
   gens:[gen_add3_regroup,gen_sub3_borrow,gen_round,gen_compare,gen_missing,
@@ -827,8 +860,22 @@ function renderChapters(){
  }
  document.getElementById('s-xp').textContent = p.xp;
  document.getElementById('s-streak').textContent = p.streak;
- document.getElementById('s-stars').textContent = p.stars;
- document.getElementById('s-done').textContent = Object.keys(p.done).length;
+ document.getElementById('s-stars').textContent = p.stars||0;
+ document.getElementById('s-done').textContent = Object.keys(p.done||{}).length;
+ // Show XP title
+ const titleBar = document.getElementById('xp-title-bar');
+ const titleText = document.getElementById('xp-title-text');
+ const currentTitle = getXpTitle(p.xp);
+ const nextTitle = getNextTitle(p.xp);
+ titleBar.style.display = 'block';
+ titleText.innerHTML = currentTitle + (nextTitle ? ` <span style="color:var(--muted);font-weight:400;font-size:.85em">· Next: ${nextTitle.title} at ${nextTitle.xp} XP</span>` : ' · MAX RANK!');
+ // Show daily challenge button if at least 1 level done
+ const dailyBtn = document.getElementById('daily-btn');
+ if(Object.keys(p.done||{}).length > 0){
+  dailyBtn.style.display = 'block';
+ } else {
+  dailyBtn.style.display = 'none';
+ }
  const root = document.getElementById('chapters');
  root.innerHTML = '';
  CHAPTERS.forEach(ch=>{
@@ -882,7 +929,7 @@ function renderQ(){
    <div class="scene-title">📋 The Setup</div>
    <div class="scene-text">${q.scene}</div>
   </div>
-  <div class="problem">${q.problem}</div>`;
+  <div class="problem">${formatProblem(q.problem)}</div>`;
  if(q.type==='mc' || q.type==='mc-sym'){
   const choices = q.type==='mc-sym' ? q.choices : makeChoices(q.answer, q.spread||10, q.maxVal||null);
   html += '<div class="choices">';
@@ -1132,6 +1179,46 @@ function confettiBurst(){
    {transform:`translate(${dx}px,${dy}px) rotate(720deg)`,opacity:0}
   ],{duration:2500+Math.random()*1500,easing:'cubic-bezier(.2,.7,.3,1)'}).onfinish=()=>c.remove();
  }
+}
+
+// ===== XP TITLES =====
+const XP_TITLES = [
+ {xp:0, title:'Garage Newbie 🔧'},
+ {xp:50, title:'Pit Crew Rookie ⚙️'},
+ {xp:150, title:'Track Day Driver 🏎️'},
+ {xp:300, title:'Speed Demon 💨'},
+ {xp:500, title:'Turbo Champion 🏆'},
+ {xp:750, title:'Supercar Master 🔥'},
+ {xp:1000, title:'Race Legend 👑'},
+ {xp:2000, title:'Math Garage GOAT 🐐'},
+];
+function getXpTitle(xp){
+ let best = XP_TITLES[0];
+ for(const t of XP_TITLES){ if(xp >= t.xp) best = t; }
+ return best.title;
+}
+function getNextTitle(xp){
+ for(const t of XP_TITLES){ if(xp < t.xp) return t; }
+ return null; // already at max
+}
+
+// ===== DAILY CHALLENGE =====
+function startDaily(){
+ const p = loadProgress();
+ // Pick 5 random generators from unlocked chapters
+ const unlocked = CHAPTERS.filter(ch=>isUnlocked(ch) && ch.id!=='boss');
+ if(unlocked.length===0) return;
+ const allGens = [];
+ unlocked.forEach(ch=>{ ch.gens.forEach(g=>{ if(!allGens.includes(g)) allGens.push(g); }); });
+ // Pick 5 random generators (allow repeats if few unlocked)
+ const picked = [];
+ for(let i=0;i<5;i++) picked.push(pick(allGens));
+ // Create a fake chapter for the daily challenge
+ const dailyCh = {
+  id:'daily', icon:'🎯', title:'Daily Challenge',
+  sub:'5 random questions', gens:picked
+ };
+ startChapter(dailyCh);
 }
 
 // ===== INIT =====
