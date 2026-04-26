@@ -469,6 +469,42 @@ function formatProblem(problem){
  return problem;
 }
 
+function gen_add1(){ // single digit addition (math facts)
+ const a = r(0,9), b = r(0,9);
+ const car = pick(CARS);
+ const scenes = [
+  `A ${car.name} has ${a} trophies from last season and wins ${b} more this season. How many trophies total?`,
+  `James has ${a} toy cars on his desk and Abigail gives him ${b} more. How many toy cars now?`,
+  `A pit crew has ${a} wrenches in one toolbox and ${b} in another. How many wrenches in total?`,
+  `A parking lot has ${a} supercars in one row and ${b} in the next row. How many supercars?`,
+  `A race driver ate ${a} grapes before the race and ${b} after. How many grapes total?`,
+ ];
+ return {
+  scene:pick(scenes),
+  problem:`${a} + ${b}`,
+  answer:a+b, type:'mc', spread:5, maxVal:18,
+  fact:`Quick math facts make you faster at everything! ⚡`
+ };
+}
+
+function gen_sub1(){ // single digit subtraction (math facts)
+ const a = r(2,9), b = r(0,a);
+ const animal = pick(ANIMALS);
+ const scenes = [
+  `A ${animal.a} had ${a} fish to eat. After eating ${b} of them, how many are left?`,
+  `James had ${a} stickers. He gave ${b} to a friend. How many does he have now?`,
+  `There were ${a} birds on a fence. ${b} flew away. How many are still on the fence?`,
+  `A pit crew had ${a} tires ready. They used ${b} on a car. How many tires are left?`,
+  `Abigail picked ${a} flowers. She put ${b} in a vase. How many are still in her hand?`,
+ ];
+ return {
+  scene:pick(scenes),
+  problem:`${a} - ${b}`,
+  answer:a-b, type:'mc', spread:4, maxVal:9,
+  fact:animal.fact
+ };
+}
+
 function gen_add2(){ // 2-digit + 2-digit, no regrouping (warm-up)
  const car1 = pick(CARS);
  let car2 = pick(CARS); let t=0;
@@ -816,6 +852,8 @@ function gen_missing(){
 
 // ===== CHAPTERS =====
 const CHAPTERS = [
+ {id:'facts',icon:'⚡',title:'Math Facts Blitz',sub:'single digit · memorize these!',
+  unlocked:true,gens:[gen_add1,gen_sub1,gen_add1,gen_sub1,gen_add1]},
  {id:'warmup',icon:'🔥',title:'Warm-Up Garage',sub:'2-digit adding · easy',
   unlocked:true,gens:[gen_add2,gen_add2,gen_sub2,gen_add2,gen_sub2]},
  {id:'place',icon:'🏷️',title:'Place Value Pit Stop',sub:'thousands, hundreds, tens',
