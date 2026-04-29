@@ -412,14 +412,27 @@ function loadProgress(){
 function loadProgressFromCloud(){
  if(!ensureFirebase() || !PLAYER) return Promise.resolve();
  return DB.ref('players/'+PLAYER).once('value').then(snap=>{
-  const val = snap.val();
-  if(val){
-   STORE.data = Object.assign(EMPTY_PROGRESS(), val);
-   // Also cache locally for offline access
+  const cloudVal = snap.val();
+  if(cloudVal){
+   const cloudData = Object.assign(EMPTY_PROGRESS(), cloudVal);
+   const localData = STORE.data || EMPTY_PROGRESS();
+   // Always take whichever has MORE XP — this handles the case where
+   // one device saved to cloud but another device has stale local data.
+   if(cloudData.xp >= (localData.xp||0)){
+    STORE.data = cloudData;
+   } else {
+    // Local is ahead of cloud — push local to cloud to sync up
+    STORE.data = localData;
+    try{ DB.ref('players/'+PLAYER).set(STORE.data); }catch(e){}
+   }
+   // Cache the winner locally
    try{localStorage.setItem('jamesmath_'+PLAYER, JSON.stringify(STORE.data))}catch(e){}
   } else {
-   // No cloud data yet — use whatever's in localStorage or start fresh
-   loadProgress();
+   // No cloud data yet — push local to cloud
+   if(!STORE.data) loadProgress();
+   if(STORE.data && STORE.data.xp > 0){
+    try{ DB.ref('players/'+PLAYER).set(STORE.data); }catch(e){}
+   }
   }
  });
 }
@@ -431,9 +444,18 @@ function saveProgress(){
   const key = PLAYER ? 'jamesmath_'+PLAYER : 'jamesmath';
   localStorage.setItem(key, JSON.stringify(STORE.data));
  }catch(e){}
- // Then push to cloud (fire and forget)
- if(ensureFirebase() && PLAYER){
-  try{ DB.ref('players/'+PLAYER).set(STORE.data); }catch(e){console.warn('cloud save failed', e);}
+ // Then push to cloud — retry ensureFirebase in case it wasn't ready before
+ if(PLAYER){
+  if(ensureFirebase()){
+   try{ DB.ref('players/'+PLAYER).set(STORE.data); }catch(e){console.warn('cloud save failed', e);}
+  } else {
+   // Firebase not ready yet — try again in 2 seconds
+   setTimeout(()=>{
+    if(ensureFirebase()){
+     try{ DB.ref('players/'+PLAYER).set(STORE.data); }catch(e){}
+    }
+   }, 2000);
+  }
  }
 }
 
@@ -1696,7 +1718,14 @@ function init(){
   // Render immediately from local cache (fast), then update from cloud
   loadProgress();
   renderChapters();
-  loadProgressFromCloud().then(()=>renderChapters()).catch(()=>{});
+  // Fetch cloud data — if it fails (Firebase slow), retry after 3 seconds
+  loadProgressFromCloud()
+   .then(()=>renderChapters())
+   .catch(()=>{
+    setTimeout(()=>{
+     loadProgressFromCloud().then(()=>renderChapters()).catch(()=>{});
+    }, 3000);
+   });
  } else {
   // No player yet — show the picker
   showPlayerPicker();
